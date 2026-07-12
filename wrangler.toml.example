@@ -1,0 +1,18 @@
+# Copy to wrangler.toml and fill in your own values.
+name = "gumleaf"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+[vars]
+# NWS and MET Norway require an identifying User-Agent with contact info.
+WEATHER_USER_AGENT = "gumleaf/1.0 (contact: you@example.com)"
+# Answer model. Any fast OpenAI chat model. gpt-4o is a safe default.
+OPENAI_MODEL = "gpt-4o"
+# Optional: default place for weather questions with no location.
+# DEFAULT_LOCATION = "Denver, CO"
+# Optional: per-number monthly answer cap (cost guard). Omit for unlimited.
+# MONTHLY_LIMIT = "200"
+
+[[kv_namespaces]]
+binding = "SMS_STATE"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"

@@ -1,0 +1,17 @@
+{
+  "name": "gumleaf",
+  "version": "1.0.0",
+  "description": "Text a phone number, get an AI answer back by SMS. Self-hostable on Cloudflare Workers.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260708.1",
+    "typescript": "^5.5.0",
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local `wrangler dev` (gitignored). Never commit real keys.
+OPENAI_API_KEY = "sk-your-key"
+TWILIO_AUTH_TOKEN = "your-twilio-auth-token"
+ALLOWED_NUMBERS = "+15551234567"
+WEATHER_USER_AGENT = "gumleaf/1.0 (contact: you@example.com)"
+SKIP_SIGNATURE_VALIDATION = "true"
