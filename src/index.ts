@@ -1,6 +1,6 @@
 import type { Env } from "./env";
 import { parseFormBody, twimlResponse, validateTwilioSignature } from "./twilio";
-import { classifyAndAnswer, summarizeForecast } from "./openai";
+import { classifyAndAnswer, summarizeForecast } from "./llm";
 import { geocode, getForecast, formatLocationName } from "./weather";
 import { getMetnoForecast } from "./metno";
 import { getContext, setContext } from "./state";
@@ -15,7 +15,7 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    const missing = ["OPENAI_API_KEY", "TWILIO_AUTH_TOKEN", "WEATHER_USER_AGENT", "ALLOWED_NUMBERS"].filter(
+    const missing = ["LLM_API_KEY", "TWILIO_AUTH_TOKEN", "WEATHER_USER_AGENT", "ALLOWED_NUMBERS"].filter(
       (name) => !(env as unknown as Record<string, string | undefined>)[name]
     );
     if (missing.length > 0) {

@@ -8,15 +8,15 @@ export interface Classified {
 }
 
 function model(env: Env): string {
-  return env.OPENAI_MODEL ?? "gpt-4o";
+  return env.LLM_MODEL ?? "gpt-4o";
 }
 
 async function chatJson(env: Env, systemPrompt: string, userContent: string): Promise<unknown> {
-  const baseUrl = env.OPENAI_BASE_URL ?? "https://api.openai.com";
+  const baseUrl = env.LLM_BASE_URL ?? "https://api.openai.com";
   const res = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${env.LLM_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -30,11 +30,11 @@ async function chatJson(env: Env, systemPrompt: string, userContent: string): Pr
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenAI request failed: HTTP ${res.status} ${text.slice(0, 200)}`);
+    throw new Error(`LLM request failed: HTTP ${res.status} ${text.slice(0, 200)}`);
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenAI returned no content");
+  if (!content) throw new Error("LLM returned no content");
   return JSON.parse(content);
 }
 
@@ -84,7 +84,7 @@ export async function summarizeForecast(
     `Question: ${question}\nLocation: ${locationName}\nForecast:\n${forecastText}`
   )) as { answer?: string };
   if (typeof raw.answer !== "string") {
-    throw new Error("OpenAI weather summary missing answer field");
+    throw new Error("LLM weather summary missing answer field");
   }
   return raw.answer;
 }

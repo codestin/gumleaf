@@ -1,6 +1,10 @@
 # Copy to .dev.vars for local `wrangler dev` (gitignored). Never commit real keys.
-OPENAI_API_KEY = "sk-your-key"
+# Any OpenAI-compatible provider works. Set LLM_BASE_URL/LLM_MODEL in wrangler.toml
+# to point elsewhere (see "Choosing your LLM" in the README).
+LLM_API_KEY = "your-llm-api-key"
 TWILIO_AUTH_TOKEN = "your-twilio-auth-token"
 ALLOWED_NUMBERS = "+15551234567"
 WEATHER_USER_AGENT = "gumleaf/1.0 (contact: you@example.com)"
+# Optional: an OpenAI key just for moderation if your LLM isn't OpenAI.
+# MODERATION_API_KEY = "sk-your-openai-key"
 SKIP_SIGNATURE_VALIDATION = "true"

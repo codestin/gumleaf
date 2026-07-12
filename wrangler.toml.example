@@ -6,8 +6,14 @@ compatibility_date = "2025-06-01"
 [vars]
 # NWS and MET Norway require an identifying User-Agent with contact info.
 WEATHER_USER_AGENT = "gumleaf/1.0 (contact: you@example.com)"
-# Answer model. Any fast OpenAI chat model. gpt-4o is a safe default.
-OPENAI_MODEL = "gpt-4o"
+# Answer model. Use whatever your provider offers (see "Choosing your LLM" in README).
+LLM_MODEL = "gpt-4o"
+# Optional: point at any OpenAI-compatible provider. Default is OpenAI.
+#   OpenRouter: "https://openrouter.ai/api"   Groq: "https://api.groq.com/openai"
+#   Local (Ollama/LM Studio): "http://localhost:11434"
+# LLM_BASE_URL = "https://api.openai.com"
+# Moderation hits OpenAI's free endpoint; skipped (fails open) for non-OpenAI keys
+# unless you set MODERATION_API_KEY (a secret) to an OpenAI key.
 # Optional: default place for weather questions with no location.
 # DEFAULT_LOCATION = "Denver, CO"
 # Optional: per-number monthly answer cap (cost guard). Omit for unlimited.
