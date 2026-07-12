@@ -87,7 +87,7 @@ Answers come from any OpenAI-compatible chat API, so you can use whoever you lik
 
 `LLM_BASE_URL` defaults to OpenAI, so if that's what you're using you can leave it unset. Whatever you pick, set `LLM_MODEL` to a model that provider actually serves.
 
-**Moderation.** Incoming messages are screened by OpenAI's free `/v1/moderations` endpoint, which is what flags self-harm so GumLeaf can reply with crisis-line info. If your `LLM_API_KEY` is an OpenAI key, this just works. If it isn't, either set `MODERATION_API_KEY` to an OpenAI key to keep it on, or leave it unset and moderation is skipped (it fails open, so messages still go through).
+**Moderation.** On by default. Incoming messages are screened by OpenAI's free `/v1/moderations` endpoint, which is what flags self-harm so GumLeaf can reply with crisis-line info. If your `LLM_API_KEY` is an OpenAI key, this just works. If it isn't, either set `MODERATION_API_KEY` to an OpenAI key to keep it on, or leave it unset and moderation is skipped (it fails open, so messages still go through). To turn it off entirely, set `MODERATION_ENABLED = "false"` — worth considering for a fully-local setup, since otherwise message text is also sent to OpenAI's moderation endpoint. The Worker logs its moderation state on first request.
 
 ## Why pay for the hosted version?
 

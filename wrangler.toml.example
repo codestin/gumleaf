@@ -13,7 +13,9 @@ LLM_MODEL = "gpt-4o"
 #   Local (Ollama/LM Studio): "http://localhost:11434"
 # LLM_BASE_URL = "https://api.openai.com"
 # Moderation hits OpenAI's free endpoint; skipped (fails open) for non-OpenAI keys
-# unless you set MODERATION_API_KEY (a secret) to an OpenAI key.
+# unless you set MODERATION_API_KEY (a secret) to an OpenAI key. On by default;
+# set MODERATION_ENABLED = "false" to turn it off (e.g. a fully-local/private setup).
+# MODERATION_ENABLED = "false"
 # Optional: default place for weather questions with no location.
 # DEFAULT_LOCATION = "Denver, CO"
 # Optional: per-number monthly answer cap (cost guard). Omit for unlimited.

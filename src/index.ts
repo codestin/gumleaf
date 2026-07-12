@@ -8,6 +8,28 @@ import { getUsage, incrementUsage, isFirstContact, markSeen } from "./quota";
 import { moderate } from "./moderation";
 import * as msg from "./messages";
 
+// Logged once per isolate (not per request) so `wrangler tail`/dev shows the
+// moderation state without spamming every message.
+let statusLogged = false;
+function logModerationStatus(env: Env, enabled: boolean): void {
+  if (statusLogged) return;
+  statusLogged = true;
+  if (!enabled) {
+    console.log("moderation: disabled (MODERATION_ENABLED=false)");
+    return;
+  }
+  const dedicated = !!env.MODERATION_API_KEY;
+  const llmIsOpenAI = !env.LLM_BASE_URL || env.LLM_BASE_URL.includes("api.openai.com");
+  if (dedicated || llmIsOpenAI) {
+    console.log("moderation: on");
+  } else {
+    console.warn(
+      "moderation: on, but LLM_BASE_URL isn't OpenAI and MODERATION_API_KEY is unset - " +
+        "the moderation call fails open (is skipped). Set MODERATION_API_KEY to an OpenAI key to keep crisis detection."
+    );
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -36,7 +58,7 @@ export default {
     const body = (params["Body"] ?? "").trim();
     const lowered = body.toLowerCase();
 
-    // Allowlist: strangers are ignored so they can't burn your Twilio/OpenAI.
+    // Allowlist: strangers are ignored so they can't burn your Twilio/LLM.
     const allowed = env.ALLOWED_NUMBERS.split(",").map((n) => n.trim()).filter(Boolean);
     if (!allowed.includes(from)) {
       return twimlResponse();
@@ -45,10 +67,15 @@ export default {
     if (!body) return twimlResponse(msg.emptyBodyHint());
     if (lowered === "help") return twimlResponse(msg.helpText());
 
-    // Moderation before the cost cap so crisis resources are never withheld.
-    const verdict = await moderate(env, body);
-    if (verdict === "self-harm") return twimlResponse(msg.crisisResources());
-    if (verdict === "blocked") return twimlResponse(msg.moderationRefusal());
+    // Moderation is on by default; set MODERATION_ENABLED=false to opt out.
+    // Runs before the cost cap so crisis resources are never withheld.
+    const moderationEnabled = env.MODERATION_ENABLED !== "false";
+    logModerationStatus(env, moderationEnabled);
+    if (moderationEnabled) {
+      const verdict = await moderate(env, body);
+      if (verdict === "self-harm") return twimlResponse(msg.crisisResources());
+      if (verdict === "blocked") return twimlResponse(msg.moderationRefusal());
+    }
 
     // Optional monthly cost cap.
     const limit = env.MONTHLY_LIMIT ? parseInt(env.MONTHLY_LIMIT, 10) : 0;

@@ -17,5 +17,9 @@ export interface Env {
   // otherwise moderation fails open (is skipped). See README.
   MODERATION_API_KEY?: string;
   MODERATION_BASE_URL?: string;
+  // Moderation is on by default (routes self-harm messages to crisis resources).
+  // Set to "false" to disable, e.g. a fully-local/private setup where you don't
+  // want message text sent to OpenAI's moderation endpoint.
+  MODERATION_ENABLED?: string;
   SKIP_SIGNATURE_VALIDATION?: string;
 }
