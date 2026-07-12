@@ -2,6 +2,8 @@
 
 Text a phone number, get a real answer back by SMS. Weather, facts, how-tos, all in a plain text message. It works anywhere a text works, including satellite messaging (iPhone satellite, Starlink direct-to-cell), because to the service a satellite text and a normal text look identical. No app, no internet needed on the sender's end.
 
+> **Just want it to work?** The hosted version is live at **[gumleaf.pages.dev](https://gumleaf.pages.dev)**. Text a number and go, nothing to set up. See [why that might be worth it](#why-pay-for-the-hosted-version) below.
+
 This is the open-source, self-hostable version. It runs on Cloudflare Workers and answers texts sent to a Twilio number you own, using your own OpenAI key.
 
 Prefer not to run infrastructure? There's a hosted version that handles the setup and upkeep for you. See ["Why pay for the hosted version?"](#why-pay-for-the-hosted-version) below.
@@ -81,6 +83,8 @@ Self-hosting is real work, and the annoying parts aren't the code. If you'd rath
 - **Uptime and support.** No one is paged when it breaks at 2am but you.
 
 The hosted version exists so you don't have to deal with any of that. If self-hosting sounds fun, this repo is yours to run. If it sounds like a chore, that's exactly what you'd be paying to avoid.
+
+**→ Get the hosted version: [gumleaf.pages.dev](https://gumleaf.pages.dev)**
 
 ## Support
 
