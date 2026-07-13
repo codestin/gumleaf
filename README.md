@@ -36,7 +36,7 @@ npx wrangler login
 npx wrangler kv namespace create SMS_STATE
 ```
 
-Copy `wrangler.toml.example` to `wrangler.toml`, paste in the KV namespace `id` it printed, and set `WEATHER_USER_AGENT` to include your own contact (NWS and MET Norway reject anonymous clients).
+Copy `wrangler.toml.example` to `wrangler.toml`, paste in the KV namespace `id` it printed, and set `WEATHER_USER_AGENT` to include your own **real** contact email or URL. NWS and MET Norway reject anonymous clients, and MET Norway specifically returns HTTP 403 for placeholder contacts (anything with `example.com`), which silently breaks non-US weather. Use a real address.
 
 ### 3. Twilio
 

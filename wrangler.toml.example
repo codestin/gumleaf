@@ -4,8 +4,10 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
 [vars]
-# NWS and MET Norway require an identifying User-Agent with contact info.
-WEATHER_USER_AGENT = "gumleaf/1.0 (contact: you@example.com)"
+# NWS and MET Norway require an identifying User-Agent with a REAL contact.
+# IMPORTANT: MET Norway rejects placeholder contacts (anything with example.com)
+# with HTTP 403, which silently breaks non-US weather. Use your real email or URL.
+WEATHER_USER_AGENT = "gumleaf/1.0 (contact: REPLACE-with-your-real-email)"
 # Answer model. Use whatever your provider offers (see "Choosing your LLM" in README).
 LLM_MODEL = "gpt-4o"
 # Optional: point at any OpenAI-compatible provider. Default is OpenAI.
