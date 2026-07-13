@@ -40,7 +40,7 @@ Copy `wrangler.toml.example` to `wrangler.toml`, paste in the KV namespace `id` 
 
 ### 3. Twilio
 
-Buy an SMS-capable number in the [Twilio Console](https://console.twilio.com). Note your **Auth Token** (Account Info panel). US numbers need [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc) before they'll reliably deliver, which takes time and paperwork (see the note below).
+Buy an SMS-capable number in the [Twilio Console](https://console.twilio.com). Note your **Auth Token** (Account Info panel). US numbers need [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc) before they'll reliably deliver — a Brand + Campaign registration, a compliant privacy policy and signup form, and a carrier review that can take days to weeks. **Heads up: this is the tedious part.** See ["Why pay for the hosted version?"](#why-pay-for-the-hosted-version) below for exactly what it involves before you commit to self-hosting.
 
 ### 4. Secrets
 
@@ -93,7 +93,7 @@ Answers come from any OpenAI-compatible chat API, so you can use whoever you lik
 
 Self-hosting is real work, and the annoying parts aren't the code. If you'd rather skip them:
 
-- **Twilio compliance.** Before a US number will reliably send app-to-person texts, you have to register for A2P 10DLC: a brand, a campaign, business details, sample messages, and a review that can take days to weeks. Getting a number approved is the single most tedious part, and it's out of your hands while you wait.
+- **Twilio A2P registration — the real gauntlet.** Before a US number reliably sends app-to-person texts, you must register for A2P 10DLC, and it's more than a form. You register a **Brand** (business identity), then a **Campaign** where you pick a use case, write a campaign description, describe your exact **opt-in / message flow**, provide **sample messages**, and declare your message contents (links, phone numbers). You need a **privacy policy** that contains specific mandated clauses — mobile-number **non-sharing**, **message frequency**, and a **"message and data rates may apply"** disclosure — or it's rejected. Your **signup form** must have an **unchecked consent checkbox** (not pre-ticked), plus frequency, rates, HELP + STOP, and links to your terms and privacy policy. Then you **wait** for carrier review (hours to weeks), and any missing piece bounces you back to fix and resubmit. It's the single most tedious part of running this, and it's entirely out of your hands while you wait.
 - **Keys and cost.** You hold your own LLM and Twilio keys, top up balances, and eat every message's cost, which is mostly Twilio (a couple of cents per answer). You're the one watching the bill.
 - **Maintenance forever.** Someone has to keep the Worker deployed, rotate keys, follow Twilio/LLM/Cloudflare API changes, and fix things when a provider shifts something. Self-hosted means that someone is you, indefinitely.
 - **Uptime and support.** No one is paged when it breaks at 2am but you.
