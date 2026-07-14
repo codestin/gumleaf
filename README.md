@@ -2,7 +2,7 @@
 
 Text a phone number, get a real answer back by SMS. Weather, facts, how-tos, all in a plain text message. It works anywhere a text works, including satellite messaging (iPhone satellite, Starlink direct-to-cell), because to the service a satellite text and a normal text look identical. No app, no internet needed on the sender's end.
 
-> **Just want it to work?** The hosted version is live at **[gumleaf.pages.dev](https://gumleaf.pages.dev)**. Text a number and go, nothing to set up. See [why that might be worth it](#why-pay-for-the-hosted-version) below.
+> **Just want it to work?** The hosted version is live at **[getgumleaf.com](https://getgumleaf.com)**. Text a number and go, nothing to set up. See [why that might be worth it](#why-pay-for-the-hosted-version) below.
 
 This is the open-source, self-hostable version. It runs on Cloudflare Workers and answers texts sent to a Twilio number you own, using the LLM of your choice (any OpenAI-compatible API: OpenAI, OpenRouter, Groq, a local model, and so on).
 
@@ -74,6 +74,34 @@ curl -s http://localhost:8787/sms \
 
 (`SKIP_SIGNATURE_VALIDATION=true` in `.dev.vars` skips Twilio's signature check for local curling. It only works on localhost.)
 
+## Contact card (optional)
+
+Make your bot save-able: generate a vCard, host it, and the bot will text it as an
+MMS on a user's first contact and whenever someone texts **CONTACT** (or VCARD /
+CARD / SAVE).
+
+```sh
+bash scripts/make-vcard.sh --name "Trail Bot" --number +15551234567 \
+  --url https://your-site.example --photo mascot.png
+```
+
+Host the resulting `.vcf` anywhere public that serves it with
+`Content-Type: text/vcard` — on Cloudflare Pages that's a `_headers` file:
+
+```
+/trail-bot.vcf
+  Content-Type: text/vcard
+```
+
+Then set `VCARD_URL` in `wrangler.toml` to its URL and redeploy. Unset = the
+feature is off. Two caveats: MMS doesn't deliver over satellite links (the text
+reply still does; the card just waits for coverage), and a handful of MMS-less
+plans won't receive it.
+
+By default the card's NOTE ends with "Powered by GumLeaf - getgumleaf.com" so the
+project spreads with every saved contact; pass `--no-attribution` if you'd rather
+it didn't. Keeping it is appreciated.
+
 ## Choosing your LLM
 
 Answers come from any OpenAI-compatible chat API, so you can use whoever you like. Set two optional vars in `wrangler.toml` and put the key in as a secret:
@@ -100,7 +128,7 @@ Self-hosting is real work, and the annoying parts aren't the code. If you'd rath
 
 The hosted version exists so you don't have to deal with any of that. If self-hosting sounds fun, this repo is yours to run. If it sounds like a chore, that's exactly what you'd be paying to avoid.
 
-**→ Get the hosted version: [gumleaf.pages.dev](https://gumleaf.pages.dev)**
+**→ Get the hosted version: [getgumleaf.com](https://getgumleaf.com)**
 
 ## Support
 

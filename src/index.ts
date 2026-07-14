@@ -1,5 +1,5 @@
 import type { Env } from "./env";
-import { parseFormBody, twimlResponse, validateTwilioSignature } from "./twilio";
+import { parseFormBody, twimlResponse, twimlResponseWithMedia, validateTwilioSignature } from "./twilio";
 import { classifyAndAnswer, summarizeForecast } from "./llm";
 import { geocode, getForecast, formatLocationName } from "./weather";
 import { getMetnoForecast } from "./metno";
@@ -66,6 +66,10 @@ export default {
 
     if (!body) return twimlResponse(msg.emptyBodyHint());
     if (lowered === "help") return twimlResponse(msg.helpText());
+    // Text back the contact card (only when a card is configured; see VCARD_URL).
+    if (env.VCARD_URL && (lowered === "contact" || lowered === "vcard" || lowered === "card" || lowered === "save")) {
+      return twimlResponseWithMedia(msg.vcardKeywordReply(), msg.vcardIntro(), env.VCARD_URL);
+    }
 
     // Moderation is on by default; set MODERATION_ENABLED=false to opt out.
     // Runs before the cost cap so crisis resources are never withheld.
@@ -102,7 +106,11 @@ export default {
     if (firstContact) await markSeen(env.SMS_STATE, from);
 
     let reply = msg.toGsm7(answer.answer);
-    if (firstContact) reply += `\n\n${msg.welcomeFooter()}`;
+    if (firstContact) {
+      reply += `\n\n${msg.welcomeFooter()}`;
+      // First contact also gets the contact card as a follow-up MMS, if configured.
+      if (env.VCARD_URL) return twimlResponseWithMedia(reply, msg.vcardIntro(), env.VCARD_URL);
+    }
     return twimlResponse(reply);
   },
 };

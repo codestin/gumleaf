@@ -21,5 +21,10 @@ export interface Env {
   // Set to "false" to disable, e.g. a fully-local/private setup where you don't
   // want message text sent to OpenAI's moderation endpoint.
   MODERATION_ENABLED?: string;
+  // Optional. Public URL of a .vcf contact card (host it anywhere, e.g. Cloudflare
+  // Pages with Content-Type: text/vcard). When set, first contact and the
+  // CONTACT/VCARD/CARD/SAVE keyword send it as an MMS so people can save the bot
+  // to their contacts. Note: MMS doesn't deliver over satellite links.
+  VCARD_URL?: string;
   SKIP_SIGNATURE_VALIDATION?: string;
 }

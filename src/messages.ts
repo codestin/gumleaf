@@ -21,6 +21,16 @@ export function helpText(): string {
   return `Text any question, get a short answer by SMS. Weather, facts, how-tos. Not for emergencies. STOP to opt out.`;
 }
 
+// Companion text for the contact-card MMS (sent on first contact and for the
+// CONTACT/VCARD/CARD/SAVE keyword when VCARD_URL is configured).
+export function vcardIntro(): string {
+  return `PS - save my contact card while you still have bars. Out past the trailhead, a name is a lot easier to find than a number you don't recognize.`;
+}
+
+export function vcardKeywordReply(): string {
+  return `Here I come as a contact card - one sec.`;
+}
+
 export function capReached(): string {
   return `You've hit this month's answer cap. It resets on the 1st.`;
 }

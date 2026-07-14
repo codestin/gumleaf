@@ -51,6 +51,19 @@ export function twimlResponse(message?: string): Response {
   });
 }
 
+// Two-message TwiML reply: the normal answer plus a follow-up MMS carrying
+// media. Used for the contact card (VCARD_URL) on first contact and keywords.
+export function twimlResponseWithMedia(message: string, mediaBody: string, mediaUrl: string): Response {
+  const body =
+    `<Response>` +
+    `<Message>${escapeXml(message)}</Message>` +
+    `<Message><Body>${escapeXml(mediaBody)}</Body><Media>${escapeXml(mediaUrl)}</Media></Message>` +
+    `</Response>`;
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?>${body}`, {
+    headers: { "Content-Type": "text/xml" },
+  });
+}
+
 function escapeXml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

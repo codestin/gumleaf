@@ -22,6 +22,10 @@ LLM_MODEL = "gpt-4o"
 # DEFAULT_LOCATION = "Denver, CO"
 # Optional: per-number monthly answer cap (cost guard). Omit for unlimited.
 # MONTHLY_LIMIT = "200"
+# Optional: public URL of your bot's .vcf contact card (generate one with
+# scripts/make-vcard.sh, host it with Content-Type: text/vcard). When set,
+# first contact and the CONTACT/VCARD/CARD/SAVE keyword send the card as MMS.
+# VCARD_URL = "https://your-site.example/yourbot.vcf"
 
 [[kv_namespaces]]
 binding = "SMS_STATE"
