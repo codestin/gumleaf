@@ -4,7 +4,7 @@ import type { Env } from "./env";
 export interface Classified {
   kind: "weather" | "general" | "transit" | "flight";
   location: string | null;
-  agency: "bart" | "caltrain" | null;
+  agency: "bart" | "caltrain" | "subway" | null;
   stop: string | null;
   flight: string | null;
   flight_date: string | null;
@@ -57,12 +57,12 @@ function dateLine(now: Date): string {
 // GSM-7 segments; short questions should still get short answers.
 export function classifyPrompt(now: Date): string {
   return `You are a sharp, warm assistant answering SMS messages for one person, who may be texting over a slow satellite link with no internet. ${dateLine(now)} ${ASCII_RULE} Respond ONLY with a JSON object:
-{"kind": "weather" | "general" | "transit" | "flight", "location": string or null, "agency": "bart" | "caltrain" | null, "stop": string or null, "flight": string or null, "flight_date": string or null, "answer": string}
+{"kind": "weather" | "general" | "transit" | "flight", "location": string or null, "agency": "bart" | "caltrain" | "subway" | null, "stop": string or null, "flight": string or null, "flight_date": string or null, "answer": string}
 
-- kind: "weather" if the message asks about weather/forecast/conditions/sunrise/sunset/daylight hours. "transit" if it asks about BART or Caltrain trains/departures/schedules. "flight" if it asks about a specific flight's status/delay/gate and gives a flight number. Otherwise "general".
+- kind: "weather" if the message asks about weather/forecast/conditions/sunrise/sunset/daylight hours. "transit" if it asks about NYC subway, BART, or Caltrain trains/departures/schedules. "flight" if it asks about a specific flight's status/delay/gate and gives a flight number. Otherwise "general".
 - location: for "weather", the place asked about, or null if none. Format "City" or "City, Region" (e.g. "Bergen, Norway"). Otherwise null.
-- agency: for "transit", "bart" or "caltrain"; null otherwise. Questions about other transit systems are "general" - answer normally and note that live train times cover BART and Caltrain so far.
-- stop: for "transit", the station/stop name asked about, or null if none given.
+- agency: for "transit", "subway" (NYC subway/MTA), "bart", or "caltrain"; null otherwise. Questions about other transit systems are "general" - answer normally and note that live train times cover the NYC subway, BART, and Caltrain so far.
+- stop: for "transit", the station/stop name asked about, or null if none given. For the subway, include the line if the message gives one (e.g. "Bedford Av L").
 - flight: for "flight", the flight number like "UA123", or null if none given.
 - flight_date: for "flight", the specific date asked about as "YYYY-MM-DD" (resolve relative dates like "tomorrow" or "7/24" using today's date; assume the next future occurrence), or null when no date is mentioned.
 - answer: the reply, plain text, no markdown. For factual or how-to questions, lead with the direct answer and pack in the useful specifics. For jokes, riddles, or casual chat, just be fun - no lectures or disclaimers. Aim for under 450 characters, and use that space only when the question needs it: a short question deserves a short answer. If kind is "weather", "transit", or "flight", set answer to "" (real data is fetched separately).`;
@@ -75,7 +75,7 @@ export async function classifyAndAnswer(env: Env, message: string): Promise<Clas
   return {
     kind,
     location: typeof raw.location === "string" && raw.location.trim() ? raw.location : null,
-    agency: raw.agency === "bart" || raw.agency === "caltrain" ? raw.agency : null,
+    agency: raw.agency === "bart" || raw.agency === "caltrain" || raw.agency === "subway" ? raw.agency : null,
     stop: typeof raw.stop === "string" && raw.stop.trim() ? raw.stop : null,
     flight: typeof raw.flight === "string" && raw.flight.trim() ? raw.flight : null,
     flight_date:

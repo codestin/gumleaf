@@ -12,6 +12,7 @@ Prefer not to run infrastructure? There's a hosted version that handles the setu
 
 - Answers any texted question with one concise SMS reply, from the LLM you point it at.
 - Real weather: geocodes the place (Open-Meteo) and pulls live forecasts from the US National Weather Service or MET Norway - sunrise/sunset times included - then phrases them for SMS. Not a guess.
+- Live NYC subway: `SUBWAY <station>` (e.g. `SUBWAY Bedford Av`, `SUBWAY 86 St Q`) returns real arrivals per direction from the MTA's GTFS-Realtime feeds - completely keyless. All 496 stations included; regenerate the table with `node scripts/gen-mta-stations.mjs`.
 - Live Bay Area trains: `BART <station>` and `CALTRAIN <stop>` return real departures (BART works out of the box; Caltrain needs a free 511.org token).
 - Flight status: `FLIGHT UA123` (or `FLIGHT SK936 on 7/24`) returns delays, terminals and gates via AeroDataBox's free tier, with FAA airport ground-stop context (keyless); degrades to a route-only answer with no keys at all.
 - No conversation memory, by design: every question is answered standalone and nothing anyone asks is stored. Privacy first - include the place in each question.

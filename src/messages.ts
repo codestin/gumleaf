@@ -27,7 +27,7 @@ export function welcomeFooter(): string {
 }
 
 export function helpText(): string {
-  return `Text any question, get a short answer by SMS. Weather (with sunrise/sunset), facts, how-tos. Live data: BART <station>, CALTRAIN <stop>, FLIGHT UA123 (add a date: FLIGHT SK936 on 7/24). Not for emergencies. STOP to opt out.`;
+  return `Text any question, get a short answer by SMS. Weather (with sunrise/sunset), facts, how-tos. Live data: SUBWAY <station> (NYC), BART <station>, CALTRAIN <stop>, FLIGHT UA123 (add a date: FLIGHT SK936 on 7/24). Not for emergencies. STOP to opt out.`;
 }
 
 // Companion text for the contact-card MMS (sent on first contact and for the

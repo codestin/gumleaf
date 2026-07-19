@@ -6,6 +6,7 @@ import { getMetnoForecast } from "./metno";
 import { getUsage, incrementUsage, isFirstContact, markSeen } from "./quota";
 import { moderate } from "./moderation";
 import { parseTransitCommand, transitAnswer } from "./transit";
+import { parseSubwayCommand, subwayAnswer } from "./mta";
 import { parseFlightCommand, flightAnswer } from "./flight";
 import * as msg from "./messages";
 
@@ -127,6 +128,10 @@ async function handleQuestion(env: Env, body: string): Promise<Answer> {
   if (transitCmd) {
     return transitAnswer(env, transitCmd.agency, transitCmd.stop);
   }
+  const subwayCmd = parseSubwayCommand(body);
+  if (subwayCmd) {
+    return subwayAnswer(env, subwayCmd.stop);
+  }
   const flightCmd = parseFlightCommand(body);
   if (flightCmd) {
     return flightAnswer(env, flightCmd.flight, flightCmd.date);
@@ -143,7 +148,10 @@ async function handleQuestion(env: Env, body: string): Promise<Answer> {
 
   if (classified.kind === "transit") {
     if (!classified.agency) {
-      return { answer: 'I have live train times for BART and Caltrain so far. Try "BART Embarcadero" or "CALTRAIN Palo Alto".', answered: false };
+      return { answer: 'I have live train times for the NYC subway, BART, and Caltrain so far. Try "SUBWAY Bedford Av", "BART Embarcadero", or "CALTRAIN Palo Alto".', answered: false };
+    }
+    if (classified.agency === "subway") {
+      return subwayAnswer(env, classified.stop ?? "");
     }
     return transitAnswer(env, classified.agency, classified.stop ?? "");
   }
