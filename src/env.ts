@@ -26,5 +26,17 @@ export interface Env {
   // CONTACT/VCARD/CARD/SAVE keyword send it as an MMS so people can save the bot
   // to their contacts. Note: MMS doesn't deliver over satellite links.
   VCARD_URL?: string;
+  // Optional live-data keys. All features degrade gracefully when unset.
+  // 511.org SF Bay token (free, 60 req/hr) for Caltrain real-time; CALTRAIN
+  // replies say "coming soon" until set.
+  TRANSIT_511_TOKEN?: string;
+  // Registered BART API key; BART works out of the box on the published demo key.
+  BART_API_KEY?: string;
+  // RapidAPI key subscribed to AeroDataBox (free tier: 600 units/mo) for FLIGHT
+  // status with gates. Without it, flights degrade to aviationstack, then to
+  // the keyless adsbdb route lookup (no times).
+  AERODATABOX_KEY?: string;
+  // aviationstack access key (free tier: 100 req/mo) - flight fallback.
+  AVIATIONSTACK_KEY?: string;
   SKIP_SIGNATURE_VALIDATION?: string;
 }

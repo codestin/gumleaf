@@ -104,3 +104,45 @@ export async function getForecast(lat: number, lon: number, userAgent: string): 
 export function formatLocationName(geo: GeoResult): string {
   return [geo.name, geo.admin1, geo.country].filter(Boolean).join(", ");
 }
+
+export interface SunTimes {
+  date: string; // "2026-07-18"
+  sunrise: string; // local ISO, "2026-07-18T05:58"
+  sunset: string;
+}
+
+// Open-Meteo daily sun times: free, no key, and timezone=auto returns local
+// wall-clock times for the queried coordinates. Callers treat a failure as
+// "no sun data" — it must never break the main forecast.
+export async function getSunTimes(lat: number, lon: number): Promise<SunTimes[]> {
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
+    `&daily=sunrise,sunset&timezone=auto&forecast_days=3`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Open-Meteo sun times failed: HTTP ${res.status}`);
+  const data = (await res.json()) as { daily?: { time?: string[]; sunrise?: string[]; sunset?: string[] } };
+  const { time = [], sunrise = [], sunset = [] } = data.daily ?? {};
+  return time
+    .map((date, i) => ({ date, sunrise: sunrise[i] ?? "", sunset: sunset[i] ?? "" }))
+    .filter((d) => d.sunrise && d.sunset);
+}
+
+// "Sun (local): Sat Jul 18 rise 5:58am set 8:31pm; Sun Jul 19 ..." — appended
+// to the forecast text so the summarizer can answer sunrise/sunset questions.
+export function formatSunTimes(days: SunTimes[]): string {
+  const parts = days.map((d) => {
+    const dayName = new Date(`${d.date}T12:00:00Z`).toUTCString().slice(0, 11).replace(",", "");
+    return `${dayName.trim()} rise ${clock(d.sunrise)} set ${clock(d.sunset)}`;
+  });
+  return `Sun times (local): ${parts.join("; ")}`;
+}
+
+function clock(isoLocal: string): string {
+  const t = isoLocal.slice(11, 16); // "05:58"
+  const [hStr, m] = t.split(":");
+  const h = parseInt(hStr ?? "", 10);
+  if (Number.isNaN(h) || m === undefined) return t;
+  const ampm = h >= 12 ? "pm" : "am";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m}${ampm}`;
+}

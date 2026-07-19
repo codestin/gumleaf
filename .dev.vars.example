@@ -8,3 +8,8 @@ WEATHER_USER_AGENT = "gumleaf/1.0 (contact: you@example.com)"
 # Optional: an OpenAI key just for moderation if your LLM isn't OpenAI.
 # MODERATION_API_KEY = "sk-your-openai-key"
 SKIP_SIGNATURE_VALIDATION = "true"
+# Optional live-data keys (everything degrades gracefully without them):
+# TRANSIT_511_TOKEN = "your-511org-token"      # free: https://511.org/open-data/token (Caltrain)
+# BART_API_KEY = "your-bart-key"               # optional; BART works on the public demo key
+# AERODATABOX_KEY = "your-rapidapi-key"        # free tier: RapidAPI -> AeroDataBox (flight status + gates)
+# AVIATIONSTACK_KEY = "your-aviationstack-key" # free tier fallback for flights

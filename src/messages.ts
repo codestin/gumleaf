@@ -13,12 +13,21 @@ export function toGsm7(text: string): string {
     .replace(/ /g, " ");
 }
 
+// Hard net against runaway model output: the prompt aims for ~450 chars, this
+// clamp guarantees a reply never exceeds ~4 concatenated GSM-7 segments.
+export const SMS_HARD_CAP = 640;
+
+export function clampSms(text: string, max: number = SMS_HARD_CAP): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max - 3).trimEnd() + "...";
+}
+
 export function welcomeFooter(): string {
   return `You're connected. Text any question and get an answer back by SMS. Reply HELP for info. Not for emergencies - contact emergency services directly.`;
 }
 
 export function helpText(): string {
-  return `Text any question, get a short answer by SMS. Weather, facts, how-tos. Not for emergencies. STOP to opt out.`;
+  return `Text any question, get a short answer by SMS. Weather (with sunrise/sunset), facts, how-tos. Live data: BART <station>, CALTRAIN <stop>, FLIGHT UA123 (add a date: FLIGHT SK936 on 7/24). Not for emergencies. STOP to opt out.`;
 }
 
 // Companion text for the contact-card MMS (sent on first contact and for the

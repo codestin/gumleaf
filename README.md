@@ -11,8 +11,11 @@ Prefer not to run infrastructure? There's a hosted version that handles the setu
 ## What it does
 
 - Answers any texted question with one concise SMS reply, from the LLM you point it at.
-- Real weather: geocodes the place (Open-Meteo) and pulls live forecasts from the US National Weather Service or MET Norway, then phrases them for SMS. Not a guess.
-- Remembers your last exchange for about 30 minutes, so follow-ups like "what about tomorrow?" work.
+- Real weather: geocodes the place (Open-Meteo) and pulls live forecasts from the US National Weather Service or MET Norway - sunrise/sunset times included - then phrases them for SMS. Not a guess.
+- Live Bay Area trains: `BART <station>` and `CALTRAIN <stop>` return real departures (BART works out of the box; Caltrain needs a free 511.org token).
+- Flight status: `FLIGHT UA123` (or `FLIGHT SK936 on 7/24`) returns delays, terminals and gates via AeroDataBox's free tier, with FAA airport ground-stop context (keyless); degrades to a route-only answer with no keys at all.
+- No conversation memory, by design: every question is answered standalone and nothing anyone asks is stored. Privacy first - include the place in each question.
+- Prompted for quality: replies aim for ~450 characters, know today's date, and answer jokes like jokes instead of lecturing.
 - Screens messages with OpenAI's free moderation endpoint and returns crisis-line info for self-harm signals. Optional: it fails open, and non-OpenAI setups can skip it or point it at an OpenAI key (see [Choosing your LLM](#choosing-your-llm)).
 - Keeps replies in GSM-7 encoding (writes temperatures like "9C" instead of using a degree symbol, and avoids fancy punctuation) so each answer stays 160 characters per SMS segment instead of 70, which roughly halves your Twilio cost.
 - Locks access to a phone-number allowlist so strangers can't run up your bill, with an optional monthly per-number cap.

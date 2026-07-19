@@ -1,11 +1,12 @@
 import type { Env } from "./env";
 import { parseFormBody, twimlResponse, twimlResponseWithMedia, validateTwilioSignature } from "./twilio";
 import { classifyAndAnswer, summarizeForecast } from "./llm";
-import { geocode, getForecast, formatLocationName } from "./weather";
+import { geocode, getForecast, formatLocationName, getSunTimes, formatSunTimes } from "./weather";
 import { getMetnoForecast } from "./metno";
-import { getContext, setContext } from "./state";
 import { getUsage, incrementUsage, isFirstContact, markSeen } from "./quota";
 import { moderate } from "./moderation";
+import { parseTransitCommand, transitAnswer } from "./transit";
+import { parseFlightCommand, flightAnswer } from "./flight";
 import * as msg from "./messages";
 
 // Logged once per isolate (not per request) so `wrangler tail`/dev shows the
@@ -88,24 +89,23 @@ export default {
     }
 
     const firstContact = await isFirstContact(env.SMS_STATE, from);
-    const prior = await getContext(env.SMS_STATE, from);
-    const priorText = prior ? `You: ${prior.question}\nBot: ${prior.answer}` : undefined;
 
+    // No conversation memory, by design: every question is answered standalone
+    // and nothing anyone asks is stored.
     let answer: Answer;
     try {
-      answer = await handleQuestion(env, body, priorText);
+      answer = await handleQuestion(env, body);
     } catch (err) {
       console.error("answer failed:", err instanceof Error ? err.message : String(err));
       return twimlResponse("Sorry, something went wrong - please try again in a minute.");
     }
 
     if (answer.answered) {
-      await setContext(env.SMS_STATE, from, { question: body, answer: answer.answer, location: answer.location });
       await incrementUsage(env.SMS_STATE, from);
     }
     if (firstContact) await markSeen(env.SMS_STATE, from);
 
-    let reply = msg.toGsm7(answer.answer);
+    let reply = msg.clampSms(msg.toGsm7(answer.answer));
     if (firstContact) {
       reply += `\n\n${msg.welcomeFooter()}`;
       // First contact also gets the contact card as a follow-up MMS, if configured.
@@ -118,11 +118,35 @@ export default {
 interface Answer {
   answer: string;
   answered: boolean;
-  location?: string;
 }
 
-async function handleQuestion(env: Env, body: string, context?: string): Promise<Answer> {
-  const classified = await classifyAndAnswer(env, body, context);
+async function handleQuestion(env: Env, body: string): Promise<Answer> {
+  // "BART <station>" / "CALTRAIN <stop>" / "FLIGHT UA123 [on 7/24]" skip the
+  // model entirely: live data, formatted deterministically.
+  const transitCmd = parseTransitCommand(body);
+  if (transitCmd) {
+    return transitAnswer(env, transitCmd.agency, transitCmd.stop);
+  }
+  const flightCmd = parseFlightCommand(body);
+  if (flightCmd) {
+    return flightAnswer(env, flightCmd.flight, flightCmd.date);
+  }
+
+  const classified = await classifyAndAnswer(env, body);
+
+  if (classified.kind === "flight") {
+    if (!classified.flight) {
+      return { answer: 'Which flight? Give me the airline code + number, e.g. "FLIGHT UA123".', answered: false };
+    }
+    return flightAnswer(env, classified.flight, classified.flight_date);
+  }
+
+  if (classified.kind === "transit") {
+    if (!classified.agency) {
+      return { answer: 'I have live train times for BART and Caltrain so far. Try "BART Embarcadero" or "CALTRAIN Palo Alto".', answered: false };
+    }
+    return transitAnswer(env, classified.agency, classified.stop ?? "");
+  }
 
   if (classified.kind !== "weather") {
     return { answer: classified.answer, answered: true };
@@ -140,10 +164,15 @@ async function handleQuestion(env: Env, body: string, context?: string): Promise
     return { answer: text, answered: false };
   }
 
-  const periods =
+  // Sun times ride along with every forecast fetch; their failure must never
+  // break the weather answer.
+  const [periods, sun] = await Promise.all([
     geo.country_code === "US"
-      ? await getForecast(geo.latitude, geo.longitude, env.WEATHER_USER_AGENT)
-      : await getMetnoForecast(geo.latitude, geo.longitude, geo.timezone, env.WEATHER_USER_AGENT);
-  const answer = await summarizeForecast(env, body, formatLocationName(geo), periods);
-  return { answer, answered: true, location: formatLocationName(geo) };
+      ? getForecast(geo.latitude, geo.longitude, env.WEATHER_USER_AGENT)
+      : getMetnoForecast(geo.latitude, geo.longitude, geo.timezone, env.WEATHER_USER_AGENT),
+    getSunTimes(geo.latitude, geo.longitude).catch(() => null),
+  ]);
+  const sunText = sun && sun.length > 0 ? formatSunTimes(sun) : undefined;
+  const answer = await summarizeForecast(env, body, formatLocationName(geo), periods, sunText);
+  return { answer, answered: true };
 }

@@ -30,3 +30,11 @@ LLM_MODEL = "gpt-4o"
 [[kv_namespaces]]
 binding = "SMS_STATE"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Optional live-data features (BART / Caltrain / flight status) use secrets, not
+# vars - set the ones you want with `wrangler secret put <NAME>`:
+#   TRANSIT_511_TOKEN   free token from https://511.org/open-data/token (Caltrain)
+#   BART_API_KEY        optional - BART works out of the box on the demo key
+#   AERODATABOX_KEY     RapidAPI key on AeroDataBox's free tier (flights + gates)
+#   AVIATIONSTACK_KEY   aviationstack free tier (flight fallback)
+# The FAA airport-status feed needs no key at all.
