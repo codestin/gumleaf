@@ -46,6 +46,8 @@ Copy `wrangler.toml.example` to `wrangler.toml`, paste in the KV namespace `id` 
 
 Buy an SMS-capable number in the [Twilio Console](https://console.twilio.com). Note your **Auth Token** (Account Info panel). US numbers need [A2P 10DLC registration](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc) before they'll reliably deliver — a Brand + Campaign registration, a compliant privacy policy and signup form, and a carrier review that can take days to weeks. **Heads up: this is the tedious part.** See ["Why pay for the hosted version?"](#why-pay-for-the-hosted-version) below for exactly what it involves before you commit to self-hosting.
 
+> **No Twilio? An untested alternative.** [SMS Gate for Android](https://sms-gate.app) (open source, Apache-2.0) turns a spare Android phone with a SIM into an SMS gateway with a REST API and webhooks — no carrier registration, no per-message fees beyond your SIM plan. The catch: this worker speaks Twilio's webhook format and replies via TwiML, so wiring SMS Gate in means adapting the inbound handler in `src/index.ts` and sending replies through its REST API instead. We haven't tried it — caveat emptor. It's only sensible for personal use over your own SIM anyway: carriers filter bulk application traffic from consumer SIMs, so don't run a public-facing service this way.
+
 ### 4. Secrets
 
 ```sh
