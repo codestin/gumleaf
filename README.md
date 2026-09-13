@@ -11,7 +11,8 @@ Prefer not to run infrastructure? There's a hosted version that handles the setu
 ## What it does
 
 - Answers any texted question with one concise SMS reply, from the LLM you point it at.
-- Real weather: geocodes the place (Open-Meteo) and pulls live forecasts from the US National Weather Service or MET Norway - sunrise/sunset times included - then phrases them for SMS. Not a guess.
+- Photo questions: text a picture with your question in the same message ("what plant is this?") and the same model answers with vision. Works on any OpenAI-compatible provider whose model accepts `image_url` content; on a text-only model the sender gets a friendly failure instead of silence. Nothing is stored.
+- Real weather: geocodes the place (Open-Meteo) and pulls live forecasts from the US National Weather Service (full week) or MET Norway (~9 days) - sunrise/sunset computed locally, no extra API - then phrases them for SMS. Not a guess.
 - Live NYC subway: `SUBWAY <station>` (e.g. `SUBWAY Bedford Av`, `SUBWAY 86 St Q`) returns real arrivals per direction from the MTA's GTFS-Realtime feeds - completely keyless. All 496 stations included; regenerate the table with `node scripts/gen-mta-stations.mjs`.
 - Live Bay Area trains: `BART <station>` and `CALTRAIN <stop>` return real departures (BART works out of the box; Caltrain needs a free 511.org token).
 - Flight status: `FLIGHT UA123` (or `FLIGHT SK936 on 7/24`) returns delays, terminals and gates via AeroDataBox's free tier, with FAA airport ground-stop context (keyless); degrades to a route-only answer with no keys at all.
@@ -20,6 +21,9 @@ Prefer not to run infrastructure? There's a hosted version that handles the setu
 - Screens messages with OpenAI's free moderation endpoint and returns crisis-line info for self-harm signals. Optional: it fails open, and non-OpenAI setups can skip it or point it at an OpenAI key (see [Choosing your LLM](#choosing-your-llm)).
 - Keeps replies in GSM-7 encoding (writes temperatures like "9C" instead of using a degree symbol, and avoids fancy punctuation) so each answer stays 160 characters per SMS segment instead of 70, which roughly halves your Twilio cost.
 - Locks access to a phone-number allowlist so strangers can't run up your bill, with an optional monthly per-number cap.
+- Built not to go silent: duplicate Twilio webhook deliveries are dropped (no double answers), every upstream fetch is timeboxed against Twilio's ~15s webhook window, geocoding gets a retry, an LLM outage still answers plain "weather in X" questions via a regex fallback and sends the raw forecast when the summarizer is down, and honest "service is briefly unavailable" copy replaces the generic apology when an upstream is out.
+- Tells the user when a US carrier silently filters an answer (Twilio error 30007, the "why didn't it reply?" mystery): with `TWILIO_ACCOUNT_SID`/`TWILIO_FROM_NUMBER` set, the worker notices the failed delivery via a status callback and texts a heads-up that can't itself be filtered.
+- `FEEDBACK <note>` lets your users leave you a note (see [Reading feedback](#reading-feedback)).
 
 ## Self-host guide
 
@@ -57,7 +61,7 @@ npx wrangler secret put ALLOWED_NUMBERS     # comma-separated E.164, e.g. +15551
 # npx wrangler secret put MODERATION_API_KEY  # optional OpenAI key, only if your LLM isn't OpenAI
 ```
 
-Optional vars in `wrangler.toml`: `DEFAULT_LOCATION`, `LLM_MODEL`, `LLM_BASE_URL`, `MONTHLY_LIMIT`.
+Optional vars in `wrangler.toml`: `DEFAULT_LOCATION`, `LLM_MODEL`, `LLM_BASE_URL`, `MONTHLY_LIMIT`, `TWILIO_FROM_NUMBER`. Optional secret `TWILIO_ACCOUNT_SID` (AC...): together with `TWILIO_FROM_NUMBER` it enables authenticated MMS photo fetches (needed if your Twilio account enforces HTTP auth on media) and the carrier-filter heads-up text.
 
 ### 5. Deploy and wire up Twilio
 
@@ -79,6 +83,16 @@ curl -s http://localhost:8787/sms \
 ```
 
 (`SKIP_SIGNATURE_VALIDATION=true` in `.dev.vars` skips Twilio's signature check for local curling. It only works on localhost.)
+
+## Reading feedback
+
+Anyone on the allowlist can text `FEEDBACK <note>` (bug reports, feature wishes) - it never counts against their cap. Notes are stored in KV under `feedback:` keys and self-expire after 180 days. Read them with:
+
+```sh
+npx wrangler kv key list --binding SMS_STATE --remote --prefix=feedback: | jq -r '.[].name'
+npx wrangler kv key get --binding SMS_STATE --remote "<key from the list>"
+npx wrangler kv key delete --binding SMS_STATE --remote "<key>"   # after you've read it
+```
 
 ## Contact card (optional)
 

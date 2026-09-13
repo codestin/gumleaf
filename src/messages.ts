@@ -22,12 +22,47 @@ export function clampSms(text: string, max: number = SMS_HARD_CAP): string {
   return text.slice(0, max - 3).trimEnd() + "...";
 }
 
+// A named upstream (geocoding/forecast/LLM) is down, not a bug: say so honestly.
+export function upstreamDown(): string {
+  return "The weather service is briefly unavailable - please try again in a few minutes.";
+}
+
+export function photoLoadFailed(): string {
+  return `Couldn't load your photo just now - please try sending it again. Photo and question in the same message works best.`;
+}
+
+// Sent out-of-band after Twilio reports a reply was carrier-filtered (30007):
+// the answer went out but the carrier discarded it, and the user saw nothing.
+export function carrierBlockedNotice(): string {
+  return `Heads up: your carrier blocked my last answer as filtered content, so it never arrived. Nothing I resend on that topic will get through - try asking something else.`;
+}
+
 export function welcomeFooter(): string {
   return `You're connected. Text any question and get an answer back by SMS. Reply HELP for info. Not for emergencies - contact emergency services directly.`;
 }
 
 export function helpText(): string {
-  return `Text any question, get a short answer by SMS. Weather (with sunrise/sunset), facts, how-tos. Live data: SUBWAY <station> (NYC), BART <station>, CALTRAIN <stop>, FLIGHT UA123 (add a date: FLIGHT SK936 on 7/24). Not for emergencies. STOP to opt out.`;
+  return `Text any question, get a short answer by SMS. Weather (with sunrise/sunset), facts, how-tos - photos too (send a picture with your question in one message). Live data: SUBWAY <station> (NYC), BART <station>, CALTRAIN <stop>, FLIGHT UA123 (add a date: FLIGHT SK936 on 7/24). FEEDBACK <note> leaves a note for the operator. Not for emergencies. STOP to opt out.`;
+}
+
+// FEEDBACK keyword: exact word alone asks for the note; "feedback <text>"
+// carries it. Only the FEEDBACK prefix is claimed - not BUG or similar words
+// that appear in real questions ("bug spray for mosquitoes").
+export type Feedback = "hint" | { text: string } | null;
+
+export function parseFeedback(body: string): Feedback {
+  const m = body.trim().match(/^feedback\b[\s:,-]*([\s\S]*)$/i);
+  if (!m) return null;
+  const text = (m[1] ?? "").trim();
+  return text ? { text } : "hint";
+}
+
+export function feedbackHint(): string {
+  return `Text FEEDBACK followed by your note - bug reports, feature wishes, anything. e.g. "FEEDBACK the weather answers are great". It's saved for the operator and never uses up your answers.`;
+}
+
+export function feedbackThanks(): string {
+  return `Got it - thanks! Your note is saved for the operator. (Feedback never uses up your answers.)`;
 }
 
 // Companion text for the contact-card MMS (sent on first contact and for the

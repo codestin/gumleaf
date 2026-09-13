@@ -26,6 +26,10 @@ LLM_MODEL = "gpt-4o"
 # scripts/make-vcard.sh, host it with Content-Type: text/vcard). When set,
 # first contact and the CONTACT/VCARD/CARD/SAVE keyword send the card as MMS.
 # VCARD_URL = "https://your-site.example/yourbot.vcf"
+# Optional: your Twilio number (E.164). With the TWILIO_ACCOUNT_SID secret set,
+# enables the carrier-filter heads-up text (Twilio error 30007) and
+# authenticated MMS photo fetches.
+# TWILIO_FROM_NUMBER = "+15551234567"
 
 [[kv_namespaces]]
 binding = "SMS_STATE"

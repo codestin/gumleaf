@@ -1,3 +1,5 @@
+import type { Env } from "./env";
+
 export async function parseFormBody(request: Request): Promise<Record<string, string>> {
   const form = await request.formData();
   const params: Record<string, string> = {};
@@ -42,9 +44,50 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export function twimlResponse(message?: string): Response {
+// First image attachment on an inbound MMS, if any. Twilio lists attachments
+// as MediaUrlN/MediaContentTypeN with NumMedia as the count.
+export function pickImageUrl(params: Record<string, string>): string | null {
+  const n = parseInt(params["NumMedia"] ?? "0", 10) || 0;
+  for (let i = 0; i < n && i < 10; i++) {
+    const url = params[`MediaUrl${i}`];
+    const type = params[`MediaContentType${i}`] ?? "";
+    if (url && type.startsWith("image/")) return url;
+  }
+  return null;
+}
+
+// Fetch Twilio-hosted MMS media and return it as a data URL for the vision
+// call. Basic auth works whether or not the account enforces HTTP auth on
+// media (and Workers strip the header on the cross-origin S3 redirect).
+// Returns null on any failure - the caller replies with a retry hint.
+export async function fetchTwilioMedia(env: Env, url: string): Promise<string | null> {
+  try {
+    const headers: Record<string, string> = {};
+    if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN) {
+      headers["Authorization"] = "Basic " + btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
+    }
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const type = res.headers.get("Content-Type")?.split(";")[0] ?? "image/jpeg";
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 5_000_000) return null; // MMS cap; guard runaway payloads
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return `data:${type};base64,${btoa(binary)}`;
+  } catch {
+    return null;
+  }
+}
+
+// statusCallback, when set, asks Twilio to POST delivery status (delivered,
+// undelivered + ErrorCode) back to that URL - how the worker learns a carrier
+// filtered an answer after the fact.
+export function twimlResponse(message?: string, statusCallback?: string): Response {
+  const cb = statusCallback ? ` statusCallback="${escapeXml(statusCallback)}"` : "";
   const body = message
-    ? `<Response><Message>${escapeXml(message)}</Message></Response>`
+    ? `<Response><Message${cb}>${escapeXml(message)}</Message></Response>`
     : `<Response></Response>`;
   return new Response(`<?xml version="1.0" encoding="UTF-8"?>${body}`, {
     headers: { "Content-Type": "text/xml" },
@@ -53,10 +96,11 @@ export function twimlResponse(message?: string): Response {
 
 // Two-message TwiML reply: the normal answer plus a follow-up MMS carrying
 // media. Used for the contact card (VCARD_URL) on first contact and keywords.
-export function twimlResponseWithMedia(message: string, mediaBody: string, mediaUrl: string): Response {
+export function twimlResponseWithMedia(message: string, mediaBody: string, mediaUrl: string, statusCallback?: string): Response {
+  const cb = statusCallback ? ` statusCallback="${escapeXml(statusCallback)}"` : "";
   const body =
     `<Response>` +
-    `<Message>${escapeXml(message)}</Message>` +
+    `<Message${cb}>${escapeXml(message)}</Message>` +
     `<Message><Body>${escapeXml(mediaBody)}</Body><Media>${escapeXml(mediaUrl)}</Media></Message>` +
     `</Response>`;
   return new Response(`<?xml version="1.0" encoding="UTF-8"?>${body}`, {

@@ -1,7 +1,7 @@
 import type { Env } from "./env";
-import { parseFormBody, twimlResponse, twimlResponseWithMedia, validateTwilioSignature } from "./twilio";
-import { classifyAndAnswer, summarizeForecast } from "./llm";
-import { geocode, getForecast, formatLocationName, getSunTimes, formatSunTimes } from "./weather";
+import { parseFormBody, twimlResponse, twimlResponseWithMedia, validateTwilioSignature, pickImageUrl, fetchTwilioMedia } from "./twilio";
+import { classifyAndAnswer, summarizeForecast, visionAnswer } from "./llm";
+import { geocode, getForecast, formatLocationName, getSunTimes, formatSunTimes, fallbackForecastText, UpstreamError } from "./weather";
 import { getMetnoForecast } from "./metno";
 import { getUsage, incrementUsage, isFirstContact, markSeen } from "./quota";
 import { moderate } from "./moderation";
@@ -34,7 +34,13 @@ function logModerationStatus(env: Env, enabled: boolean): void {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const receivedAt = Date.now();
     const url = new URL(request.url);
+
+    if (request.method === "POST" && url.pathname === "/status") {
+      return handleStatusCallback(request, env, url);
+    }
+
     if (request.method !== "POST" || url.pathname !== "/sms") {
       return new Response("Not found", { status: 404 });
     }
@@ -56,6 +62,20 @@ export default {
       if (!valid) return new Response("Invalid signature", { status: 403 });
     }
 
+    // Idempotency: Twilio redelivers a webhook (retry after a slow response,
+    // carrier duplicates) with the same MessageSid. Answering twice sends the
+    // user two different replies and double-counts usage - drop repeats with
+    // an empty TwiML. Best-effort: KV is eventually consistent, which is fine
+    // for the seconds-later retry case that actually happens.
+    const messageSid = params["MessageSid"] ?? "";
+    if (messageSid) {
+      const sidKey = `sid:${messageSid}`;
+      if (await env.SMS_STATE.get(sidKey)) {
+        return twimlResponse();
+      }
+      await env.SMS_STATE.put(sidKey, "1", { expirationTtl: 600 });
+    }
+
     const from = params["From"] ?? "";
     const body = (params["Body"] ?? "").trim();
     const lowered = body.toLowerCase();
@@ -66,11 +86,39 @@ export default {
       return twimlResponse();
     }
 
-    if (!body) return twimlResponse(msg.emptyBodyHint());
+    // MMS photo, if attached: fetched up front so both moderation and the
+    // vision answer see it. Nothing is stored - strictly this one message.
+    const imageUrl = pickImageUrl(params);
+    let image: string | null = null;
+    if (imageUrl) {
+      image = await fetchTwilioMedia(env, imageUrl);
+      if (!image) {
+        return twimlResponse(msg.photoLoadFailed());
+      }
+    }
+
+    if (!body && !image) return twimlResponse(msg.emptyBodyHint());
     if (lowered === "help") return twimlResponse(msg.helpText());
     // Text back the contact card (only when a card is configured; see VCARD_URL).
     if (env.VCARD_URL && (lowered === "contact" || lowered === "vcard" || lowered === "card" || lowered === "save")) {
       return twimlResponseWithMedia(msg.vcardKeywordReply(), msg.vcardIntro(), env.VCARD_URL);
+    }
+
+    // FEEDBACK <note>: stored in KV for the operator, never metered. Read with
+    // `wrangler kv key list --prefix=feedback:` (see README); self-expires
+    // after 180 days so an unattended deployment doesn't accumulate keys.
+    const feedback = msg.parseFeedback(body);
+    if (feedback === "hint") {
+      return twimlResponse(msg.feedbackHint());
+    }
+    if (feedback) {
+      const ts = new Date().toISOString();
+      await env.SMS_STATE.put(
+        `feedback:${ts}:${from}`,
+        JSON.stringify({ v: 1, source: "sms", from, text: feedback.text, ts }),
+        { expirationTtl: 180 * 24 * 3600 }
+      );
+      return twimlResponse(msg.feedbackThanks());
     }
 
     // Moderation is on by default; set MODERATION_ENABLED=false to opt out.
@@ -78,7 +126,7 @@ export default {
     const moderationEnabled = env.MODERATION_ENABLED !== "false";
     logModerationStatus(env, moderationEnabled);
     if (moderationEnabled) {
-      const verdict = await moderate(env, body);
+      const verdict = await moderate(env, body, image ?? undefined);
       if (verdict === "self-harm") return twimlResponse(msg.crisisResources());
       if (verdict === "blocked") return twimlResponse(msg.moderationRefusal());
     }
@@ -95,10 +143,14 @@ export default {
     // and nothing anyone asks is stored.
     let answer: Answer;
     try {
-      answer = await handleQuestion(env, body);
+      answer = await handleQuestion(env, body, image ?? undefined, receivedAt);
     } catch (err) {
-      console.error("answer failed:", err instanceof Error ? err.message : String(err));
-      return twimlResponse("Sorry, something went wrong - please try again in a minute.");
+      const e = err instanceof Error ? err : new Error(String(err));
+      const stage = err instanceof UpstreamError ? err.stage : "unknown";
+      console.error(`answer failed [${stage}] ${e.name}: ${e.message}`, e.stack ?? "");
+      return twimlResponse(
+        err instanceof UpstreamError ? msg.upstreamDown() : "Sorry, something went wrong - please try again in a minute."
+      );
     }
 
     if (answer.answered) {
@@ -107,21 +159,87 @@ export default {
     if (firstContact) await markSeen(env.SMS_STATE, from);
 
     let reply = msg.clampSms(msg.toGsm7(answer.answer));
+    // Track delivery of the real answer so a carrier content-filter (30007)
+    // triggers an out-of-band notice instead of the user seeing pure silence.
+    const statusCb = `${url.origin}/status`;
     if (firstContact) {
       reply += `\n\n${msg.welcomeFooter()}`;
       // First contact also gets the contact card as a follow-up MMS, if configured.
-      if (env.VCARD_URL) return twimlResponseWithMedia(reply, msg.vcardIntro(), env.VCARD_URL);
+      if (env.VCARD_URL) return twimlResponseWithMedia(reply, msg.vcardIntro(), env.VCARD_URL, statusCb);
     }
-    return twimlResponse(reply);
+    return twimlResponse(reply, statusCb);
   },
 };
+
+// Twilio POSTs delivery status here for every answer (statusCallback on the
+// TwiML). The only status worth acting on is a carrier content-filter (30007):
+// the answer was sent but silently discarded, so tell the user out-of-band.
+// Needs TWILIO_ACCOUNT_SID + TWILIO_FROM_NUMBER to send the notice; without
+// them the callback is acknowledged and only logged.
+async function handleStatusCallback(request: Request, env: Env, url: URL): Promise<Response> {
+  const params = await parseFormBody(request);
+  const isLocalDev = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (!(env.SKIP_SIGNATURE_VALIDATION === "true" && isLocalDev)) {
+    const signature = request.headers.get("X-Twilio-Signature") ?? "";
+    const valid = await validateTwilioSignature(request.url, params, signature, env.TWILIO_AUTH_TOKEN);
+    if (!valid) return new Response("Invalid signature", { status: 403 });
+  }
+
+  const to = params["To"] ?? "";
+  const sid = params["MessageSid"] ?? "";
+  if (params["ErrorCode"] === "30007") {
+    console.error(`carrier filtered an answer (30007) to ${to}`);
+    if (to && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER) {
+      // Twilio can fire the callback more than once; notify at most once per SID.
+      const dedupeKey = `statusnotified:${sid}`;
+      if (!(await env.SMS_STATE.get(dedupeKey))) {
+        await env.SMS_STATE.put(dedupeKey, "1", { expirationTtl: 3600 });
+        try {
+          const base = env.TWILIO_API_BASE ?? "https://api.twilio.com";
+          // No StatusCallback on this send: a plain notice can't be filtered, and
+          // omitting it means no callback, so a notice can never notify itself.
+          await fetch(`${base}/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+            method: "POST",
+            headers: {
+              Authorization: "Basic " + btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`),
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({ To: to, From: env.TWILIO_FROM_NUMBER, Body: msg.carrierBlockedNotice() }),
+          });
+        } catch (err) {
+          console.error("carrier-block notice failed:", err instanceof Error ? err.message : String(err));
+        }
+      }
+    }
+  }
+  return new Response("", { status: 200 });
+}
 
 interface Answer {
   answer: string;
   answered: boolean;
 }
 
-async function handleQuestion(env: Env, body: string): Promise<Answer> {
+// Twilio abandons a webhook (and the user gets SILENCE - worse than any error
+// text) at ~15s. Slow optional stages budget against the webhook's arrival
+// time so a reply, even a degraded one, is always composed inside the window.
+const WEBHOOK_DEADLINE_MS = 12_500;
+
+function windowLeft(startedAt: number): number {
+  return WEBHOOK_DEADLINE_MS - (Date.now() - startedAt);
+}
+
+async function handleQuestion(env: Env, body: string, image?: string, startedAt: number = Date.now()): Promise<Answer> {
+  // A photo makes it a vision question: one model call, image + any caption,
+  // metered like any answer. Strictly per-message - a follow-up text can't
+  // see an earlier photo (no history, by design), so the reply hints at that
+  // pairing only via the classify prompt when someone references a photo.
+  if (image) {
+    // Media fetch + moderation may have burned seconds already; cap the vision
+    // call so even its failure lands in-window as an error reply, not silence.
+    return { answer: await visionAnswer(env, body, image, Math.max(2000, Math.min(10_000, windowLeft(startedAt)))), answered: true };
+  }
+
   // "BART <station>" / "CALTRAIN <stop>" / "FLIGHT UA123 [on 7/24]" skip the
   // model entirely: live data, formatted deterministically.
   const transitCmd = parseTransitCommand(body);
@@ -172,15 +290,32 @@ async function handleQuestion(env: Env, body: string): Promise<Answer> {
     return { answer: text, answered: false };
   }
 
-  // Sun times ride along with every forecast fetch; their failure must never
-  // break the weather answer.
-  const [periods, sun] = await Promise.all([
+  // Sun times are computed locally and ride along with every forecast; their
+  // failure must never break the weather answer.
+  const periods =
     geo.country_code === "US"
-      ? getForecast(geo.latitude, geo.longitude, env.WEATHER_USER_AGENT)
-      : getMetnoForecast(geo.latitude, geo.longitude, geo.timezone, env.WEATHER_USER_AGENT),
-    getSunTimes(geo.latitude, geo.longitude).catch(() => null),
-  ]);
-  const sunText = sun && sun.length > 0 ? formatSunTimes(sun) : undefined;
-  const answer = await summarizeForecast(env, body, formatLocationName(geo), periods, sunText);
+      ? await getForecast(geo.latitude, geo.longitude, env.WEATHER_USER_AGENT)
+      : await getMetnoForecast(geo.latitude, geo.longitude, geo.timezone, env.WEATHER_USER_AGENT);
+  let sunText: string | undefined;
+  try {
+    const sun = getSunTimes(geo.latitude, geo.longitude, geo.timezone);
+    sunText = sun.length > 0 ? formatSunTimes(sun) : undefined;
+  } catch {
+    sunText = undefined;
+  }
+  let answer: string;
+  try {
+    // Geocode retries can eat most of the window; with the data already in
+    // hand, the raw forecast beats a timed-out webhook.
+    const budgetMs = Math.min(8000, windowLeft(startedAt));
+    if (budgetMs < 2500) {
+      throw new Error(`skipped: only ${budgetMs}ms left in the webhook window`);
+    }
+    answer = await summarizeForecast(env, body, formatLocationName(geo), periods, sunText, budgetMs);
+  } catch (err) {
+    // LLM down with the data already in hand: send the data itself.
+    console.error("summarize failed, sending raw forecast:", err instanceof Error ? err.message : String(err));
+    answer = fallbackForecastText(formatLocationName(geo), periods);
+  }
   return { answer, answered: true };
 }

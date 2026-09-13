@@ -21,6 +21,16 @@ export interface Env {
   // Set to "false" to disable, e.g. a fully-local/private setup where you don't
   // want message text sent to OpenAI's moderation endpoint.
   MODERATION_ENABLED?: string;
+  // Optional. Twilio Account SID (AC...). Enables two nice-to-haves: Basic auth
+  // when fetching MMS photo media (needed if your account enforces HTTP auth on
+  // media), and the out-of-band carrier-block notice (see TWILIO_FROM_NUMBER).
+  TWILIO_ACCOUNT_SID?: string;
+  // Optional. Your Twilio number in E.164. With TWILIO_ACCOUNT_SID set, the
+  // worker texts the sender a heads-up when a carrier silently filters an
+  // answer (Twilio error 30007) - otherwise that failure looks like silence.
+  TWILIO_FROM_NUMBER?: string;
+  // Test hook: override the Twilio API host.
+  TWILIO_API_BASE?: string;
   // Optional. Public URL of a .vcf contact card (host it anywhere, e.g. Cloudflare
   // Pages with Content-Type: text/vcard). When set, first contact and the
   // CONTACT/VCARD/CARD/SAVE keyword send it as an MMS so people can save the bot
