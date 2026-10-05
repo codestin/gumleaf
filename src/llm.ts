@@ -57,14 +57,37 @@ const GSM_RULE =
 // Labor Day?"), which the model otherwise answers from its training cutoff.
 // Including the time also varies the prompt through the day, so repeat casual
 // asks ("tell me a joke") stop landing on the model's single modal output.
-function dateLine(now: Date): string {
+// Rendered in the sender's zone when one is known (see tz.ts): a UTC stamp
+// is already "tomorrow" from 5pm Pacific, which once had a Saturday-evening
+// question answered as if it were Sunday. Unknown or bogus zones fall back
+// to UTC, labeled as such.
+function dateLine(now: Date, timezone?: string): string {
+  if (timezone) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone,
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).formatToParts(now);
+      const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+      const stamp = `${get("weekday")}, ${get("day")} ${get("month")} ${get("year")} ${get("hour")}:${get("minute")}`;
+      return `Today is ${stamp} (${timezone} local time).`;
+    } catch {
+      // RangeError for an unknown zone name: fall through to UTC.
+    }
+  }
   return `Today is ${now.toUTCString().slice(0, 22)} UTC.`;
 }
 
 // Exported for tests. The 450-char aim keeps good answers inside 3 concatenated
 // GSM-7 segments; short questions should still get short answers.
-export function classifyPrompt(now: Date): string {
-  return `You are a sharp, warm assistant answering SMS messages for one person, who may be texting over a slow satellite link with no internet. ${dateLine(now)} ${GSM_RULE} Respond ONLY with a JSON object:
+export function classifyPrompt(now: Date, timezone?: string): string {
+  return `You are a sharp, warm assistant answering SMS messages for one person, who may be texting over a slow satellite link with no internet. ${dateLine(now, timezone)} ${GSM_RULE} Respond ONLY with a JSON object:
 {"kind": "weather" | "general" | "transit" | "flight", "location": string or null, "agency": "bart" | "caltrain" | "subway" | null, "stop": string or null, "flight": string or null, "flight_date": string or null, "answer": string}
 
 - kind: "weather" if the message asks about weather/forecast/conditions/sunrise/sunset/daylight hours. "transit" if it asks about NYC subway, BART, or Caltrain trains/departures/schedules. "flight" if it asks about a specific flight's status/delay/gate and gives a flight number. Otherwise "general".
@@ -87,10 +110,10 @@ export function regexClassify(body: string): Classified | null {
   return { kind: "weather", location, agency: null, stop: null, flight: null, flight_date: null, answer: "" };
 }
 
-export async function classifyAndAnswer(env: Env, message: string): Promise<Classified> {
+export async function classifyAndAnswer(env: Env, message: string, timezone?: string): Promise<Classified> {
   let raw: Partial<Classified>;
   try {
-    raw = (await chatJson(env, classifyPrompt(new Date()), message)) as Partial<Classified>;
+    raw = (await chatJson(env, classifyPrompt(new Date(), timezone), message)) as Partial<Classified>;
   } catch (err) {
     const fallback = regexClassify(message);
     if (fallback) {
@@ -114,8 +137,8 @@ export async function classifyAndAnswer(env: Env, message: string): Promise<Clas
 }
 
 // Exported for tests.
-export function weatherPrompt(now: Date): string {
-  return `You summarize a real weather forecast for an SMS reply. ${dateLine(now)} Use ONLY the forecast data provided; do not invent conditions or numbers. Keep units as given but ${GSM_RULE} Respond ONLY with a JSON object:
+export function weatherPrompt(now: Date, timezone?: string): string {
+  return `You summarize a real weather forecast for an SMS reply. ${dateLine(now, timezone)} Use ONLY the forecast data provided; do not invent conditions or numbers. Keep units as given but ${GSM_RULE} Respond ONLY with a JSON object:
 {"answer": string}
 
 - answer: the key forecast info answering the question, under 450 characters, plain text, no markdown. Include temps and conditions. If sunrise/sunset times are included in the data, mention them ONLY when the question asks about them. If the question asks about dates beyond the forecast's range, say the forecast only goes about a week out and summarize the latest days provided.`;
@@ -127,7 +150,8 @@ export async function summarizeForecast(
   locationName: string,
   periods: ForecastPeriod[],
   sunText?: string,
-  timeoutMs = 8000
+  timeoutMs = 8000,
+  timezone?: string
 ): Promise<string> {
   const forecastText =
     periods
@@ -138,7 +162,7 @@ export async function summarizeForecast(
       .join("\n") + (sunText ? `\n${sunText}` : "");
   const raw = (await chatJson(
     env,
-    weatherPrompt(new Date()),
+    weatherPrompt(new Date(), timezone),
     `Question: ${question}\nLocation: ${locationName}\nForecast:\n${forecastText}`,
     timeoutMs
   )) as { answer?: string };
@@ -152,13 +176,13 @@ export async function summarizeForecast(
 // Uses the OpenAI-style image_url content part, which most OpenAI-compatible
 // providers accept for their vision models; a text-only provider errors here
 // and the caller replies with a friendly failure text. Exported for tests.
-export function visionPrompt(now: Date): string {
-  return `You are a sharp, warm assistant answering an SMS that came with a photo. ${dateLine(now)} ${GSM_RULE} Look at the photo and answer the sender's question about it; with no question, identify or describe what's shown and share the most useful details. Read specifics from the image itself - labels, text, landmarks. If you're not sure what something is, say so rather than guessing. Respond ONLY with a JSON object: {"answer": string} - plain text, no markdown, under 450 characters.`;
+export function visionPrompt(now: Date, timezone?: string): string {
+  return `You are a sharp, warm assistant answering an SMS that came with a photo. ${dateLine(now, timezone)} ${GSM_RULE} Look at the photo and answer the sender's question about it; with no question, identify or describe what's shown and share the most useful details. Read specifics from the image itself - labels, text, landmarks. If you're not sure what something is, say so rather than guessing. Respond ONLY with a JSON object: {"answer": string} - plain text, no markdown, under 450 characters.`;
 }
 
 const VISION_DEFAULT_QUESTION = "What is in this photo? Identify it and share the most useful details.";
 
-export async function visionAnswer(env: Env, question: string, imageDataUrl: string, timeoutMs = 10_000): Promise<string> {
+export async function visionAnswer(env: Env, question: string, imageDataUrl: string, timeoutMs = 10_000, timezone?: string): Promise<string> {
   const baseUrl = env.LLM_BASE_URL ?? "https://api.openai.com";
   const res = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
@@ -170,7 +194,7 @@ export async function visionAnswer(env: Env, question: string, imageDataUrl: str
       model: model(env),
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: visionPrompt(new Date()) },
+        { role: "system", content: visionPrompt(new Date(), timezone) },
         {
           role: "user",
           content: [

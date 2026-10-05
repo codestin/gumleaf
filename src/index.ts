@@ -1,6 +1,7 @@
 import type { Env } from "./env";
 import { parseFormBody, twimlResponse, twimlResponseWithMedia, validateTwilioSignature, pickImageUrl, fetchTwilioMedia } from "./twilio";
 import { classifyAndAnswer, summarizeForecast, visionAnswer } from "./llm";
+import { senderTimezone } from "./tz";
 import { geocode, getForecast, formatLocationName, getSunTimes, formatSunTimes, fallbackForecastText, UpstreamError } from "./weather";
 import { getMetnoForecast } from "./metno";
 import { getUsage, incrementUsage, isFirstContact, markSeen } from "./quota";
@@ -77,6 +78,8 @@ export default {
     }
 
     const from = params["From"] ?? "";
+    // Derived fresh from this request's geo hints; nothing about it is kept.
+    const timezone = senderTimezone({ country: params["FromCountry"], state: params["FromState"], from });
     const body = (params["Body"] ?? "").trim();
     const lowered = body.toLowerCase();
 
@@ -143,7 +146,7 @@ export default {
     // and nothing anyone asks is stored.
     let answer: Answer;
     try {
-      answer = await handleQuestion(env, body, image ?? undefined, receivedAt);
+      answer = await handleQuestion(env, body, image ?? undefined, receivedAt, timezone);
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       const stage = err instanceof UpstreamError ? err.stage : "unknown";
@@ -229,7 +232,15 @@ function windowLeft(startedAt: number): number {
   return WEBHOOK_DEADLINE_MS - (Date.now() - startedAt);
 }
 
-async function handleQuestion(env: Env, body: string, image?: string, startedAt: number = Date.now()): Promise<Answer> {
+// timezone: the sender's IANA zone when Twilio's per-request geo hints give
+// one (never stored); grounds "today" in the model prompts.
+async function handleQuestion(
+  env: Env,
+  body: string,
+  image?: string,
+  startedAt: number = Date.now(),
+  timezone?: string
+): Promise<Answer> {
   // A photo makes it a vision question: one model call, image + any caption,
   // metered like any answer. Strictly per-message - a follow-up text can't
   // see an earlier photo (no history, by design), so the reply hints at that
@@ -237,7 +248,7 @@ async function handleQuestion(env: Env, body: string, image?: string, startedAt:
   if (image) {
     // Media fetch + moderation may have burned seconds already; cap the vision
     // call so even its failure lands in-window as an error reply, not silence.
-    return { answer: await visionAnswer(env, body, image, Math.max(2000, Math.min(10_000, windowLeft(startedAt)))), answered: true };
+    return { answer: await visionAnswer(env, body, image, Math.max(2000, Math.min(10_000, windowLeft(startedAt))), timezone), answered: true };
   }
 
   // "BART <station>" / "CALTRAIN <stop>" / "FLIGHT UA123 [on 7/24]" skip the
@@ -255,7 +266,7 @@ async function handleQuestion(env: Env, body: string, image?: string, startedAt:
     return flightAnswer(env, flightCmd.flight, flightCmd.date);
   }
 
-  const classified = await classifyAndAnswer(env, body);
+  const classified = await classifyAndAnswer(env, body, timezone);
 
   if (classified.kind === "flight") {
     if (!classified.flight) {
@@ -311,7 +322,9 @@ async function handleQuestion(env: Env, body: string, image?: string, startedAt:
     if (budgetMs < 2500) {
       throw new Error(`skipped: only ${budgetMs}ms left in the webhook window`);
     }
-    answer = await summarizeForecast(env, body, formatLocationName(geo), periods, sunText, budgetMs);
+    // The forecast's own zone wins over the sender's: "tomorrow in Bergen"
+    // means Bergen's tomorrow.
+    answer = await summarizeForecast(env, body, formatLocationName(geo), periods, sunText, budgetMs, geo.timezone ?? timezone);
   } catch (err) {
     // LLM down with the data already in hand: send the data itself.
     console.error("summarize failed, sending raw forecast:", err instanceof Error ? err.message : String(err));
