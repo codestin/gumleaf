@@ -1,8 +1,8 @@
 # GumLeaf
 
-Text a phone number, get a real answer back by SMS. Weather, facts, how-tos, all in a plain text message. It works anywhere a text works, including satellite messaging (iPhone satellite, Starlink direct-to-cell), because to the service a satellite text and a normal text look identical. No app, no internet needed on the sender's end.
+Text a phone number and get a short answer back by SMS, including weather, facts, and how-tos. After setup, your phone needs working two-way SMS. No app or mobile data is required. Satellite delivery depends on the device, carrier, plan, and support for messaging a business number.
 
-> **Just want it to work?** The hosted version is live at **[getgumleaf.com](https://getgumleaf.com)**. Text a number and go, nothing to set up. See [why that might be worth it](#why-pay-for-the-hosted-version) below.
+> **Use the hosted version.** Text TRIAL to +1 252-486-5323 (252-GUMLEAF) from a US or Canadian mobile number. Use the code to finish signup on a computer if your phone cannot open links. The 14-day trial includes 10 answers total and requires a billing email and card. Unless canceled, it renews at $4.99/month or $47.90/year (USD). [Current prices and renewal terms](https://getgumleaf.com/#pricing) · [Computer setup](https://getgumleaf.com/text-ai-without-internet)
 
 This is the open-source, self-hostable version. It runs on Cloudflare Workers and answers texts sent to a Twilio number you own, using the LLM of your choice (any OpenAI-compatible API: OpenAI, OpenRouter, Groq, a local model, and so on).
 
